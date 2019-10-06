@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context=".MainActivity">
+
+    <item
+        android:id="@+id/drawBorders"
+        android:title="Draw borders"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/manualBorders"
+        android:title="Detect borders manually"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+
+    <item
+        android:id="@+id/resolution"
+        android:title="High resolution mode (slow)"
+        android:checkable="true"
+        app:showAsAction="never" />
+
+</menu>
