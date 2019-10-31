@@ -94,33 +94,31 @@ public final class LatexTableFormatter extends AbstractTextFormatter {
 
     @Override
     public String documentStart() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("\\documentclass[a4paper,11pt]{article}");
-        sb.append(getLineSeparator());
-        sb.append("\\usepackage{array}");
-        sb.append(getLineSeparator());
-        sb.append("\\newcolumntype{L}[1]"
+        String sb = "\\documentclass[a4paper,11pt]{article}" +
+                getLineSeparator() +
+                "\\usepackage{array}" +
+                getLineSeparator() +
+                "\\newcolumntype{L}[1]"
                 + "{>{\\raggedright\\let\\newline\\\\\\arraybackslash"
-                + "\\hspace{0pt}}m{#1}}");
-        sb.append(getLineSeparator());
-        sb.append("\\newcolumntype{C}[1]"
+                + "\\hspace{0pt}}m{#1}}" +
+                getLineSeparator() +
+                "\\newcolumntype{C}[1]"
                 + "{>{\\centering\\let\\newline\\\\\\arraybackslash"
-                + "\\hspace{0pt}}m{#1}}");
-        sb.append(getLineSeparator());
-        sb.append("\\newcolumntype{R}[1]"
+                + "\\hspace{0pt}}m{#1}}" +
+                getLineSeparator() +
+                "\\newcolumntype{R}[1]"
                 + "{>{\\raggedleft\\let\\newline\\\\\\arraybackslash"
-                + "\\hspace{0pt}}m{#1}}");
-        sb.append(getLineSeparator());
-        sb.append("\\begin{document}");
-        sb.append(getLineSeparator());
-        return sb.toString();
+                + "\\hspace{0pt}}m{#1}}" +
+                getLineSeparator() +
+                "\\begin{document}" +
+                getLineSeparator();
+        return sb;
     }
 
     @Override
     public String documentEnd() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("\\end{document}");
-        sb.append(getLineSeparator());
-        return sb.toString();
+        String sb = "\\end{document}" +
+                getLineSeparator();
+        return sb;
     }
 }

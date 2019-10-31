@@ -212,8 +212,8 @@ class GameMatrixImpl implements Cloneable, BitFreeMatrixInterface {
     protected static int findDuplicateBits(final byte[] data) {
         int currentMask = 0;
         int duplicates = 0;
-        for (int i = 0; i < data.length; i++) {
-            final int shifted = 1 << data[i];
+        for (byte datum : data) {
+            final int shifted = 1 << datum;
             duplicates |= currentMask & shifted;
             currentMask |= shifted;
         }
@@ -226,8 +226,8 @@ class GameMatrixImpl implements Cloneable, BitFreeMatrixInterface {
      */
     protected static int getNumberMask(final byte[] data) {
         int currentMask = 0;
-        for (int i = 0; i < data.length; i++) {
-            currentMask |= 1 << data[i];
+        for (byte datum : data) {
+            currentMask |= 1 << datum;
         }
         // mask out UNSET (1 == 1<<0)
         return currentMask & (~1);

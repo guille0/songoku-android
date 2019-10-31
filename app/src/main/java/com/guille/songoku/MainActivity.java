@@ -39,40 +39,28 @@ import android.widget.SeekBar.OnSeekBarChangeListener;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
-import org.opencv.core.CvType;
 
 // For NN
-import org.tensorflow.lite.Interpreter;
-import java.nio.channels.FileChannel;
-import android.app.Activity;
-import java.nio.MappedByteBuffer;
 import java.io.IOException;
-import android.content.res.AssetFileDescriptor;
-import java.io.FileInputStream;
 
-import org.opencv.imgproc.Imgproc;
+public class MainActivity extends AppCompatActivity {
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-
-    private Boolean drawBorders = false;
-    private Boolean manualBorders = false;
+    private boolean drawBorders = false;
+    private boolean manualBorders = false;
     private int currentResolution = 0;
     private double borderExt = 62.5;
     private double borderInt = 50;
 
     private int REQUEST_CODE_PERMISSIONS = 101;
     private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
-    ImageView ivBitmap;
 
-    Menu optionsMenu;
+    private Menu optionsMenu;
+    private ImageView imageView;
 
-    private Classifier mClassifier;
+    private Classifier classifier;
 
-    Size screen;
-    Rational aspectRatio;
-
-    ImageAnalysis imageAnalysis;
-
+    private Size screen;
+    private Rational aspectRatio;
 
     // Load OpenCV
     static {
@@ -86,27 +74,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ivBitmap = findViewById(R.id.ivBitmap);
+        imageView = findViewById(R.id.ivBitmap);
 
         // Initialize the neural network
         try {
-            mClassifier = new Classifier(this);
+            classifier = new Classifier(this);
         } catch (IOException e) {
             Log.e("tag", "init(): Failed to create Classifier", e);
         }
 
         Sudoku sudoku = Sudoku.getInstance();
-        sudoku.setClassifier(mClassifier);
-
-        aspectRatio = new Rational(ivBitmap.getWidth(), ivBitmap.getHeight());
-        screen = new Size(ivBitmap.getWidth(), ivBitmap.getHeight());
+        sudoku.setClassifier(classifier);
 
         // Check for permissions/request them
         if (allPermissionsGranted()) {
             startCamera();
         } else {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
+            ActivityCompat.requestPermissions(MainActivity.this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
         }
+
+        aspectRatio = new Rational(imageView.getWidth(), imageView.getHeight());
+        screen = new Size(imageView.getWidth(), imageView.getHeight());
 
         // SeekbarExt changes the variable borderExt
         final SeekBar seekBarExt = findViewById(R.id.seekBarExt);
@@ -133,27 +121,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 borderInt = (double) progress;
             }
         });
-
-
     }
 
     private void startCamera() {
-
         CameraX.unbindAll();
-        imageAnalysis = setImageAnalysis();
-
-        // Bind to lifecycle
+        ImageAnalysis imageAnalysis = setImageAnalysis();
         CameraX.bindToLifecycle(this, imageAnalysis);
     }
 
-
-
     private ImageAnalysis setImageAnalysis() {
-        // Setup image analysis pipeline that computes average pixel luminance
+        // Get latest frame as an Image, process it and project it onto ImageView
         HandlerThread analyzerThread = new HandlerThread("OpenCVAnalysis");
         analyzerThread.start();
         ImageAnalysisConfig imageAnalysisConfig;
 
+        // Low or high resolution
         if (currentResolution == 0) {
             // Low resolution
             imageAnalysisConfig = new ImageAnalysisConfig.Builder()
@@ -171,48 +153,33 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     .setImageQueueDepth(1).build();
         }
 
-
         ImageAnalysis imageAnalysis = new ImageAnalysis(imageAnalysisConfig);
 
-
         imageAnalysis.setAnalyzer(
-                new ImageAnalysis.Analyzer() {
-                    @Override
-                    public void analyze(ImageProxy imageProxy, int rotationDegrees) {
-                        //Analyzing live camera feed begins.
+                (imageProxy, rotationDegrees) -> {
+                    //Analyzing live camera feed begins.
 
-                        // Transform Image to Bitmap
-                        final Image cameraImage = imageProxy.getImage();
-                        final Bitmap bitmap = imageToBitmap(cameraImage, rotationDegrees);
+                    // Transform Image to Bitmap
+                    final Image cameraImage = imageProxy.getImage();
+                    final Bitmap bitmap = imageToBitmap(cameraImage, rotationDegrees);
 
-                        if(bitmap==null)
-                            return;
+                    if (bitmap == null) return;
 
-                        Mat mat = new Mat();
-                        Utils.bitmapToMat(bitmap, mat);
-//                        mat.convertTo(mat, CvType.CV_8UC4);
+                    Mat mat = new Mat();
+                    Utils.bitmapToMat(bitmap, mat);
 
-                        // Sends image to ImageProcessing class and returns final image
-                        mat = ImageProcessing.preprocess(mat, drawBorders, manualBorders, borderExt, borderInt);
+                    // Sends image to ImageProcessing class and returns final image
+                    mat = ImageProcessing.preprocess(mat, drawBorders, manualBorders, borderExt, borderInt);
 
-                        Utils.matToBitmap(mat, bitmap);
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                ivBitmap.setImageBitmap(bitmap);
-                            }
-                        });
+                    // Write final image
+                    Utils.matToBitmap(mat, bitmap);
+                    runOnUiThread(() -> imageView.setImageBitmap(bitmap));
 
-                    }
                 });
-
         return imageAnalysis;
-
     }
 
-
     public Bitmap imageToBitmap(Image image, int rotationDegrees) {
-
         assert (image.getFormat() == ImageFormat.NV21);
 
         // NV21 is a plane of 8 bit Y values followed by interleaved  Cb Cr
@@ -228,27 +195,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         YuvImage yuvImage = new YuvImage(ib.array(),
                 ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
 
-
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         yuvImage.compressToJpeg(new Rect(0, 0,
                 image.getWidth(), image.getHeight()), 100, out);
         byte[] imageBytes = out.toByteArray();
         Bitmap bm = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
-        Bitmap bitmap = bm;
-
 
         // Rotation by 90º
         Matrix matrix = new Matrix();
         matrix.postRotate(90);
 
-        bitmap = Bitmap.createBitmap(bm, 0, 0,
-                bm.getWidth(), bm.getHeight(), matrix, true);
-        return bitmap;
+        return Bitmap.createBitmap(bm, 0, 0, bm.getWidth(), bm.getHeight(), matrix, true);
     }
 
-
 //    PERMISSIONS
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -264,7 +224,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private boolean allPermissionsGranted() {
-
         for (String permission : REQUIRED_PERMISSIONS) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
                 return false;
@@ -273,9 +232,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return true;
     }
 
-
 //    BUTTONS AND OPTIONS
-
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -290,7 +247,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         switch (item.getItemId()) {
 
             case R.id.resolution:
-                if (item.isChecked() == false) {
+                if (!item.isChecked()) {
                     currentResolution = 1;
                     item.setChecked(true);
                     startCamera();
@@ -303,7 +260,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
 
             case R.id.drawBorders:
-                if (item.isChecked() == false) {
+                if (!item.isChecked()) {
                     drawBorders = true;
                     item.setChecked(true);
                     return true;
@@ -314,12 +271,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
 
             case R.id.manualBorders:
-                ConstraintLayout borderOptions = (ConstraintLayout)findViewById(R.id.borderOptions);
-                if (item.isChecked() == false) {
+                ConstraintLayout borderOptions = findViewById(R.id.borderOptions);
+                if (!item.isChecked()) {
                     manualBorders = true;
                     item.setChecked(true);
 
-                    // Also activate drawBorders so we can see them
+                    // Also activates drawBorders by default
                     MenuItem drawBs = optionsMenu.findItem(R.id.drawBorders);
                     drawBorders = true;
                     drawBs.setChecked(true);
@@ -336,9 +293,5 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
 
         return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    public void onClick(View view) {
     }
 }

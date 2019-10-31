@@ -137,7 +137,7 @@ public final class Creator {
         GameMatrix target = new GameMatrixImpl();
         Random random = new Random();
 
-        byte[] substitution = createNumbersToDistribute(random, 1);
+        byte[] substitution = createNumbersToDistribute(random);
         for (int row = 0; row < GameMatrix.SIZE; row++) {
             for (int column = 0; column < GameMatrix.SIZE; column++) {
                 byte original = fullyFilled.get(row, column);
@@ -219,22 +219,19 @@ public final class Creator {
 
     /** Create a random array with numbers to distribute.
     ** @param r the random number generator to use.
-    ** @param multiplicity the number of times to add the numbers 1 to 9.
-    * 1 means adding 1 to 9 only once. 2 means adding 1 to 9 twice.
-    * @return an array with randomly ordered numbers from 1 to 9
+    ** @return an array with randomly ordered numbers from 1 to 9
     * with each number occuring {@code multiplicity} times.
     */
     protected static byte[] createNumbersToDistribute(
-            final Random r,
-            final int multiplicity) {
+            final Random r) {
         int totalNumbers = GameMatrix.MAXIMUM_VALUE
                 - GameMatrix.MINIMUM_VALUE + 1;
         List<Integer> numbersToDistribute = new ArrayList<>(totalNumbers
-                * multiplicity);
+                * 1);
         for (int number = GameMatrix.MINIMUM_VALUE;
                 number <= GameMatrix.MAXIMUM_VALUE;
                 number++) {
-            for (int j = 0; j < multiplicity; j++) {
+            for (int j = 0; j < 1; j++) {
                 numbersToDistribute.add(number);
             }
         }
@@ -349,7 +346,7 @@ public final class Creator {
         assert row % GameMatrix.BLOCK_SIZE == 0;
         assert column % GameMatrix.BLOCK_SIZE == 0;
 
-        byte[] numbers = createNumbersToDistribute(random, 1);
+        byte[] numbers = createNumbersToDistribute(random);
         int k = 0;
         for (int i = 0; i < GameMatrix.BLOCK_SIZE; i++) {
             for (int j = 0; j < GameMatrix.BLOCK_SIZE; j++) {

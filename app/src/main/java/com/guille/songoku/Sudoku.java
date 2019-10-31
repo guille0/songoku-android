@@ -1,6 +1,5 @@
 package com.guille.songoku;
 
-import org.opencv.core.MatOfPoint;
 import org.opencv.core.Scalar;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -13,22 +12,15 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Core;
 
 import java.util.List;
-import java.util.Comparator;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.lang.System;
 import java.util.HashMap;
 import java.util.Map;
 
 // For testing
-import android.os.Environment;
-import java.io.File;
-import org.opencv.imgcodecs.Imgcodecs;
 
 import org.opencv.core.CvType;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+
 import org.opencv.android.Utils;
 import android.util.Log;
 
@@ -47,12 +39,15 @@ public class Sudoku {
     private byte[][] sudokuArray = new byte[9][9];
     private byte[][] sudokuSolvedArray = new byte[9][9];
 
-    // Hashmap for already solved sudokus
-    private Map<byte[][], byte[][]> alreadySolved = new HashMap<byte[][], byte[][]>();
+    // Map for already solved sudokus
+    private Map<byte[][], byte[][]> alreadySolved = new HashMap<>();
 
     private Mat imgEdges = new Mat();
 
-    private Classifier mClassifier;
+    private Classifier classifier;
+
+    // Maximum time before giving up on a sudoku (ms)
+    private final long maxTime = 100;
 
     // Singleton stuff
     private static final Sudoku ourInstance = new Sudoku();
@@ -61,11 +56,11 @@ public class Sudoku {
         return ourInstance;
     }
 
-    private Sudoku() {
-    }
+    private Sudoku() {}
 
     // Main methods
     public Boolean buildFromImageManual(Mat imgSudoku, Boolean drawBorders, double borderInt, double borderExt) {
+//        imgEdges = new Mat(3,3);
         // Black and white
         Imgproc.cvtColor(imgSudoku, imgEdges, Imgproc.COLOR_RGB2GRAY);
 
@@ -125,7 +120,7 @@ public class Sudoku {
             }
         }
 
-        if (drawBorders == true) {
+        if (drawBorders) {
             drawBordersManual(imgSudoku, borderExt, borderInt);
         }
 
@@ -134,7 +129,6 @@ public class Sudoku {
     }
 
     public Boolean buildFromImageAuto(Mat imgSudoku, Boolean drawBorders) {
-        Mat imgEdges = new Mat();
         // Black and white
         Imgproc.cvtColor(imgSudoku, imgEdges, Imgproc.COLOR_RGB2GRAY);
 
@@ -160,37 +154,40 @@ public class Sudoku {
         double w = imgEdges.width()/9;
         double h = imgEdges.height()/9;
 
-        double threshold = imgEdges.width() * 0.6;
+        double approxNumberSize = w/2*0.8;
+
+        double threshold = imgEdges.width() * 0.9;
         int border = 4;
 
         for (int i=0; i<9; i++) {
             center = new Point( w*i+(w/2), h*i+(h/2));
-            for (int y = (int)center.y; y>0; y--) {
+
+            for (int y = (int) (center.y-approxNumberSize); y>0; y--) {
                 if (Core.countNonZero(imgEdges.row(y)) < threshold) {
-                    top[i] = (int) y+border;
+                    top[i] = y +border;
                     break;
                 }
             }
-            for (int y = (int)center.y; y<imgEdges.height(); y++) {
+            for (int y = (int) (center.y+approxNumberSize); y<imgEdges.height(); y++) {
                 if (Core.countNonZero(imgEdges.row(y)) < threshold) {
                     bottom[i] = y-border;
                     break;
                 }
             }
-            for (int x = (int)center.x; x>0; x--) {
+            for (int x = (int) (center.x-approxNumberSize); x>0; x--) {
                 if (Core.countNonZero(imgEdges.col(x)) < threshold) {
                     left[i] = x+border;
                     break;
                 }
             }
-            for (int x = (int)center.x; x<imgEdges.width(); x++) {
+            for (int x = (int) (center.x+approxNumberSize); x<imgEdges.width(); x++) {
                 if (Core.countNonZero(imgEdges.col(x)) < threshold) {
                     right[i] = x-border;
                     break;
                 }
             }
             // Drawing lines
-            if (drawBorders == true) {
+            if (drawBorders) {
                 Imgproc.line(imgSudoku, new Point(0, top[i]), new Point(imgSudoku.width() - 1, top[i]), colorBorder, 1);
                 Imgproc.line(imgSudoku, new Point(0, bottom[i]), new Point(imgSudoku.width() - 1, bottom[i]), colorBorder, 1);
                 Imgproc.line(imgSudoku, new Point(left[i], 0), new Point(left[i], imgSudoku.height() - 1), colorBorder, 1);
@@ -198,10 +195,8 @@ public class Sudoku {
             }
         }
 
-
         for (int i=0; i<9; i++) {
             for (int j=0; j<9; j++) {
-
                 // Try and catch error here
                 try {
                     Rect rectCrop = new Rect(
@@ -213,26 +208,19 @@ public class Sudoku {
 
                     guessNumber(imgSquare, i, j);
                 } catch (CvException e) {
-                    Log.i("exception", "caught exception, not analyzing sudoku");
+                    e.printStackTrace();
                     return false;
                 }
             }
         }
-
         return true;
-
     }
 
     public void solve() {
-        // Save solutions in a dictionary
+        // Save solutions in a Map so we don't have to do them again
         if (alreadySolved.containsValue(sudokuArray)) {
-            Log.i("sudoku.solve()", "loading solved");
             sudokuSolvedArray = alreadySolved.get(sudokuArray);
-
         } else {
-            // Maximum time before giving up on a sudoku (ms)
-            long maxTime = 200;
-
             // Solving the sudoku
             Riddle riddle = new GameMatrixFactory().newRiddle();
             riddle.setAll(sudokuArray);
@@ -242,14 +230,13 @@ public class Sudoku {
             List<GameMatrix> solutions = solver.solve(maxTime);
 
             if (!solutions.isEmpty()) {
-//                Log.i("sudoku.solve()", "Saving sudoku solution");
                 sudokuSolvedArray = solutions.get(0).getArray();
                 alreadySolved.put(sudokuArray, sudokuSolvedArray);
             }
         }
     }
 
-    public void guessNumber(Mat imgSquare, int i, int j) {
+    private void guessNumber(Mat imgSquare, int i, int j) {
         // Check how many non-blank pixels there are and assume if there is a number
         if (Core.countNonZero(imgSquare) < imgSquare.total()*0.95) {
             // Resize to 28x28
@@ -257,35 +244,34 @@ public class Sudoku {
             int interpolation = Imgproc.INTER_CUBIC;
             Imgproc.resize(imgSquare, resizeImage, resizeImage.size(), 0, 0, interpolation);
 
-            // Saving it to a file (for testing) (delete)
-//            if (i == 5) {
-//                if (j == 1 || j==2 || j==4 || j==5 || j==7 || j==8){
-//                    count++;
-//                    File path = new File(Environment.getExternalStorageDirectory() + "/Images/sixes/" + Integer.toString(i) + "/");
-//                    path.mkdirs();
-//                    File file = new File(path, "square" + Integer.toString(count) + ".png");
-//                    Imgcodecs.imwrite(file.toString(), resizeImage);
-//                }
-//            }
+            // TEST: Saving to files
+//            count++;
+//
+//            File path = new File(Environment.getExternalStorageDirectory() + "/Images/font5/" + Integer.toString(i) + "/");
+//            path.mkdirs();
+//            File file = new File(path, "square" + Integer.toString(count) + ".png");
+//            Imgcodecs.imwrite(file.toString(), resizeImage);
+//
+//            sudokuArray[i][j] = 0;
+            // ENDTEST
 
             // Mat to Bitmap
-            Bitmap bmp = null;
+            Bitmap bmp;
             bmp = Bitmap.createBitmap(resizeImage.cols(), resizeImage.rows(), Bitmap.Config.ARGB_8888);
             Utils.matToBitmap(resizeImage, bmp);
 
             // Guess the number
-            Result result = mClassifier.classify(bmp);
+            Result result = classifier.classify(bmp);
 
             sudokuArray[i][j] = (byte) result.getNumber();
         } else {
             sudokuArray[i][j] = 0;
         }
-
     }
 
     // Setters
     public void setClassifier(Classifier classer) {
-        mClassifier = classer;
+        classifier = classer;
     }
 
     public void setOptionsColorNumber(Scalar color) {
@@ -320,7 +306,11 @@ public class Sudoku {
                 // draw the detected numbers
 //                if (sudokuArray[i][j] != 0) {
 //                    Imgproc.putText(imgSudoku, Byte.toString(sudokuArray[i][j]),
-//                            new Point(x * i + x / 2, y * j + y / 2), 1, 1.0, blue);
+//                    new Point(x * i + (x/2) - digitSize.width/2, y * j + (y/2) + (digitSize.height + baseline[0])/2),
+//                            fontface,
+//                            fontsize,
+//                            colorNumber,
+//                            thickness);
 //                }
 
                 // Draw the solution
@@ -337,7 +327,7 @@ public class Sudoku {
         }
     }
 
-    public void drawBordersManual(Mat imgSudoku, double borderExt, double borderInt) {
+    private void drawBordersManual(Mat imgSudoku, double borderExt, double borderInt) {
         final double w = imgSudoku.width();
         final double h = imgSudoku.height();
         final double x = w/9;

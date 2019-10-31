@@ -1,27 +1,28 @@
 package com.guille.songoku;
 
 public class Result {
+    // The result of a guess with our classifier
 
-    private final int mNumber;
-    private final float mProbability;
-    private final long mTimeCost;
+    private final int number;
+    private final float probability;
+    private final long timeCost;
 
-    public Result(float[] probs, long timeCost) {
-        mNumber = argmax(probs);
-        mProbability = probs[mNumber];
-        mTimeCost = timeCost;
+    public Result(float[] probs, long time) {
+        number = argmax(probs);
+        probability = probs[number];
+        timeCost = time;
     }
 
     public int getNumber() {
-        return mNumber;
+        return number;
     }
 
     public float getProbability() {
-        return mProbability;
+        return probability;
     }
 
     public long getTimeCost() {
-        return mTimeCost;
+        return timeCost;
     }
 
     private static int argmax(float[] probs) {

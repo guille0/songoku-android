@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
-import android.util.Log;
 
 import org.tensorflow.lite.Interpreter;
 
@@ -14,13 +13,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.Arrays;
 
 
 public class Classifier {
     private static final String LOG_TAG = Classifier.class.getSimpleName();
 
-    private static final String MODEL_NAME = "my_model.tflite";
+    private static final String MODEL_NAME = "36000_numbers.tflite";
 
     private static final int BATCH_SIZE = 1;
     public static final int IMG_HEIGHT = 28;
@@ -28,27 +26,28 @@ public class Classifier {
     private static final int NUM_CHANNEL = 1;
     private static final int NUM_CLASSES = 10;
 
-    private final Interpreter.Options options = new Interpreter.Options();
-    private final Interpreter mInterpreter;
-    private final ByteBuffer mImageData;
-    private final int[] mImagePixels = new int[IMG_HEIGHT * IMG_WIDTH];
+    private final Interpreter interpreter;
+    private final ByteBuffer imageData;
+    private final int[] imagePixels = new int[IMG_HEIGHT * IMG_WIDTH];
     private final float[][] mResult = new float[1][NUM_CLASSES];
 
     public Classifier(Activity activity) throws IOException {
-        mInterpreter = new Interpreter(loadModelFile(activity), options);
-        mImageData = ByteBuffer.allocateDirect(
+        Interpreter.Options options = new Interpreter.Options();
+        interpreter = new Interpreter(loadModelFile(activity), options);
+        imageData = ByteBuffer.allocateDirect(
                 4 * BATCH_SIZE * IMG_HEIGHT * IMG_WIDTH * NUM_CHANNEL);
-        mImageData.order(ByteOrder.nativeOrder());
+        imageData.order(ByteOrder.nativeOrder());
     }
 
     public Result classify(Bitmap bitmap) {
         convertBitmapToByteBuffer(bitmap);
         long startTime = SystemClock.uptimeMillis();
-        mInterpreter.run(mImageData, mResult);
+
+        interpreter.run(imageData, mResult);
+
         long endTime = SystemClock.uptimeMillis();
         long timeCost = endTime - startTime;
-        Log.v(LOG_TAG, "classify(): result = " + Arrays.toString(mResult[0])
-                + ", timeCost = " + timeCost);
+
         return new Result(mResult[0], timeCost);
     }
 
@@ -62,19 +61,19 @@ public class Classifier {
     }
 
     private void convertBitmapToByteBuffer(Bitmap bitmap) {
-        if (mImageData == null) {
+        if (imageData == null) {
             return;
         }
-        mImageData.rewind();
+        imageData.rewind();
 
-        bitmap.getPixels(mImagePixels, 0, bitmap.getWidth(), 0, 0,
+        bitmap.getPixels(imagePixels, 0, bitmap.getWidth(), 0, 0,
                 bitmap.getWidth(), bitmap.getHeight());
 
         int pixel = 0;
         for (int i = 0; i < IMG_WIDTH; ++i) {
             for (int j = 0; j < IMG_HEIGHT; ++j) {
-                int value = mImagePixels[pixel++];
-                mImageData.putFloat(convertPixel(value));
+                int value = imagePixels[pixel++];
+                imageData.putFloat(convertPixel(value));
             }
         }
     }

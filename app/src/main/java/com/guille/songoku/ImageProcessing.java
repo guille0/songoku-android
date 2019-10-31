@@ -1,15 +1,10 @@
 package com.guille.songoku;
 
-import android.os.Environment;
-import java.io.File;
-
 import java.util.List;
 import java.util.Comparator;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 
-import org.opencv.core.RotatedRect;
 import org.opencv.core.Size;
 import org.opencv.core.Scalar;
 import org.opencv.core.Mat;
@@ -18,42 +13,30 @@ import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.CvType;
 
-import org.opencv.android.OpenCVLoader;
-import org.opencv.android.Utils;
-
 import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Core;
 
-import org.opencv.imgcodecs.Imgcodecs;
 
-import android.util.Log;
-
-
-public class ImageProcessing {
+class ImageProcessing {
     public static Mat preprocess(Mat imgOriginal, Boolean drawBorders, Boolean manualBorders,
                                  double borderExtSize, double borderIntSize) {
-        double borderInt = 4;   // default value
-        double borderExt = 4;   // default value
+        double borderInt;   // default value
+        double borderExt;   // default value
 
-        // TODO: Inside findSudoku, make sure it has at least 9 inner contours
-        // To be more sure it's a real sudoku
+        // Find a sudoku in the image
         MatOfPoint contourSudoku = findSudoku(imgOriginal);
 
         if (!contourSudoku.empty()) {
-            // If we have a contour, extract it into a new, warped image
+            // If we have a possible sudoku, extract it into a new, warped image
             TransformedImage transImg = extractSudoku(imgOriginal, contourSudoku);
 
-            if (transImg.isSudoku == true) {
+            if (transImg.isSudoku) {
                 Sudoku sudoku = Sudoku.getInstance();
 
-                Boolean success = false;
+                boolean success;
 
-                if (manualBorders == true) {
-                    // NOTE: Load these 2 from options
-                    // we get them from 0 to 100
-                    // just divide by 50
-//                    borderIntSize = 1;       // From 0.0 to 2.0
-//                    borderExtSize = 1.25;    // From 0.0 to 2.0
+                // Checks for borders either manually or automatically
+                if (manualBorders) {
                     borderIntSize = borderIntSize/50;
                     borderExtSize = borderExtSize/50;
 
@@ -62,21 +45,20 @@ public class ImageProcessing {
 
                     borderInt = Math.ceil(transImg.imgSudoku.height() / borderIntSize);
                     borderExt = Math.ceil(transImg.imgSudoku.height() / borderExtSize);
-                    success = sudoku.buildFromImageManual(transImg.imgSudoku, drawBorders,
-                            borderInt, borderExt);
-                } else {
-                    success = sudoku.buildFromImageAuto(transImg.imgSudoku, drawBorders);
-                }
 
-                // If we could not read the image properly
-                if (success == false) {
-                    return imgOriginal;
+                    // Return if it's not a valid sudoku
+                    if (!sudoku.buildFromImageManual(transImg.imgSudoku, drawBorders, borderInt, borderExt))
+                        return imgOriginal;
+                } else {
+                    // Return if it's not a valid sudoku
+                    if (!sudoku.buildFromImageAuto(transImg.imgSudoku, drawBorders))
+                        return imgOriginal;
                 }
 
                 sudoku.solve();
                 sudoku.drawNumbers(transImg.imgSudoku);
 
-                // And paste it back into the imgOriginal
+                // Get the inverse of the perspective matrix in order to paste the sudoku back
                 Mat invPerspective = transImg.perspectiveMatrix.inv();
 
                 // Create a blank image of the same size as the original
@@ -94,14 +76,8 @@ public class ImageProcessing {
 
                 return imgFloatingSudoku;
             }
-
-
-
         }
-//        Log.i("hey", "we found no sudoku this frame");
-
         return imgOriginal;
-
     }
 
     public static MatOfPoint findSudoku(Mat imgOriginal) {
@@ -126,50 +102,20 @@ public class ImageProcessing {
         Imgproc.findContours(imgEdges, contours, hierarchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
 
         // Sort contours by cv2.contourArea to get the biggest one
-        Collections.sort(contours, new Comparator<MatOfPoint>() {
-            @Override
-            public int compare(MatOfPoint o1, MatOfPoint o2) {
-                if (Imgproc.contourArea(o1) > Imgproc.contourArea(o2)) {
-                    return -1;
-                }
-                if (Imgproc.contourArea(o2) > Imgproc.contourArea(o1)) {
-                    return 1;
-                } else {
-                    return 0;
-                }
+        Collections.sort(contours, (o1, o2) -> {
+            if (Imgproc.contourArea(o1) > Imgproc.contourArea(o2)) {
+                return -1;
             }
-        } );
+            if (Imgproc.contourArea(o2) > Imgproc.contourArea(o1)) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
 
-        // TODO: loop through them all, biggest to smallest, until we find one with 9 or more inner contours
-        // The biggest contour with 9+ subcontours gets returned
-        // If we don't find one, return new MatOfPoint();
-//
-//        List<MatOfPoint> contours = new ArrayList<>();
-//        Mat hierarchy = new Mat();
-//        Imgproc.findContours(imgEdges, contours, hierarchy, Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE);
-//
-//
-//        if (contours.size() > 0) {
-//            List<MatOfPoint> contoursSquares = new ArrayList<>();
-//
-//            double currentContour = 0;
-//            while (currentContour != -1) {
-//                contoursSquares.add(contours.get((int) currentContour));
-//                currentContour = hierarchy.get(0, (int) currentContour)[0];
-//            }
-//            if (!contoursSquares.isEmpty()) {
-//                Imgproc.drawContours(imgSudoku, contoursSquares, -1, new Scalar(255, 0, 0, 0), 1);
-//            }
-
-        // If we don't find any contours, return empty Mat
-
-
-        // If we find a contour of a decent size, return it
+        // If we find a contour, return it
         if (contours.size() > 0) {
-//            int minSize = 100;
-//            if (contours.get(0).total() > minSize) {
-                return contours.get(0);
-//            }
+            return contours.get(0);
         }
         return new MatOfPoint();
     }
@@ -184,8 +130,7 @@ public class ImageProcessing {
         // If it has 4 corners it might just be a sudoku
         if (contourApprox2f.total() == 4) {
             // Extract it
-            TransformedImage transImg = cropFromPoints(imgOriginal, contourApprox2f);
-            return transImg;
+            return cropFromPoints(imgOriginal, contourApprox2f);
         }
 
         return new TransformedImage(false);
@@ -202,7 +147,7 @@ public class ImageProcessing {
 
         double dimension = Math.max(size.width, size.height);
 
-        List<Point> dstListPoints = new ArrayList<Point>();
+        List<Point> dstListPoints = new ArrayList<>();
         dstListPoints.add(new Point(0,0));
         dstListPoints.add(new Point(0,dimension));
         dstListPoints.add(new Point(dimension,0));
@@ -238,19 +183,16 @@ public class ImageProcessing {
     public static List<Point> orderCorners(List<Point> points) {
         // returns in order topleft, bottomleft, topright, bottomright
         // First order them by X
-        Collections.sort(points, new Comparator<Point>() {
-            @Override
-            public int compare(Point p1, Point p2) {
-                if (p1.x > p2.x) {
-                    return 1;
-                }
-                if (p1.x < p2.x) {
-                    return -1;
-                } else {
-                    return 0;
-                }
+        Collections.sort(points, (p1, p2) -> {
+            if (p1.x > p2.x) {
+                return 1;
             }
-        } );
+            if (p1.x < p2.x) {
+                return -1;
+            } else {
+                return 0;
+            }
+        });
 
         // Now get the first 2, order them by Y, first is topleft
         List<Point> left = new ArrayList<>();
@@ -272,19 +214,16 @@ public class ImageProcessing {
 
 
     public static List<Point> sortByY(List<Point> list) {
-        Collections.sort(list, new Comparator<Point>() {
-            @Override
-            public int compare(Point p1, Point p2) {
-                if (p1.y > p2.y) {
-                    return 1;
-                }
-                if (p1.y < p2.y) {
-                    return -1;
-                } else {
-                    return 0;
-                }
+        Collections.sort(list, (p1, p2) -> {
+            if (p1.y > p2.y) {
+                return 1;
             }
-        } );
+            if (p1.y < p2.y) {
+                return -1;
+            } else {
+                return 0;
+            }
+        });
 
         return list;
     }

@@ -1,6 +1,7 @@
 *.iml
 .gradle
 /local.properties
+/opencv
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
